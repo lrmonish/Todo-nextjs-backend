@@ -4,12 +4,16 @@ const app = express();
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
 const jwt = require('jsonwebtoken');
+const Result = require('folktale/result');
+
 
 const {Task, User} = require('./models/model');
 
 app.use(express.json());
 
 app.use(cors());
+
+
 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -61,6 +65,26 @@ app.post('/task', async (req, res) => {
     }
   });
 
+  app.delete('/deleteuser/:id', async (req, res) => {
+    const taskId = req.params.id;
+  
+    try {
+      const task = await User.findByPk(taskId);
+      if (!task) {
+        return res.status(404).json({ message: 'user not found' });
+      }
+  
+      await task.destroy();
+      return res.status(200).json({ message: 'user deleted' });
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Error deleting user' });
+    }
+  });
+
+
+
   app.put('/updatetask/:id', async (req, res) => {
     const taskId = req.params.id;
 
@@ -78,42 +102,122 @@ app.post('/task', async (req, res) => {
     }
   });
 
- app.post('/register', async (req, res) => {
-    try {
-      
-      const { name, email, mobile, gender, country, password, hobbies } = req.body;
+
+
+
+app.post('/register', async (req, res) => {
   
-      
-      const existingUser = await User.findOne({
-        where: {
-          [Op.or]: [{ email }, { mobile }]
-        }
-      });
-  
-      if (existingUser) {
-        return res.status(400).json({ message: 'User with this email or mobile number already exists' });
-      }
-  
-      // Hash the password
-      const hashedPassword = await bcrypt.hash(password, 10);
-  
-      
-      const newUser = await User.create({
-        name,
-        email,
-        mobile,
-        gender,
-        country,
-        password: hashedPassword,
-        hobbies
-      });
-  
-      res.status(201).json({ message: 'User registered successfully', user: newUser });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: 'Error registering user' });
+  const { name, email, mobile, gender, country, password, hobbies } = req.body;
+
+  const result = await composeResult(
+
+      (hashedPassword) => createUser({
+              name,
+              email,
+              mobile,
+              gender,
+              country,
+              password: hashedPassword.getOrElse(null),
+              hobbies
+          }
+      ),
+      () => generatePassword(password),
+      () => checkForExistingUser({email, mobile})
+  )
+ await respond(result,res,'Success', 'Error');
+
+});
+
+const respond = (result,res, succ, err)=>
+{
+     if(result)
+     { 
+       console.log("first",result);
+      return res.status(200).json({ message: succ }) ;
     }
+     else
+     {
+      console.log("second",result);
+      return res.status(400).json({ message: err }) ;
+     }
+}
+
+
+
+const composeResult = async(...args) =>{
+ 
+const reverse = args.reverse();
+
+let result;
+
+for(let i=0; i<reverse.length; i++)
+{
+
+  if(i==0)
+  {
+    reverse[i]();
+    
+  }
+  else if(i==1)
+  {
+    result = await reverse[i]();
+    
+  }
+  else
+  {
+    reverse[i](result);
+    
+  }
+  
+}
+}
+
+
+const createUser = ({
+  name,
+  email,
+  mobile,
+  gender,
+  country,
+  password,
+  hobbies
+})=>{
+
+  User.create({
+    name,
+    email,
+    mobile,
+    gender,
+    country,
+    password,
+    hobbies
+})
+}
+
+const generatePassword = async(password) => {
+  return  Result.Ok(await bcrypt.hash(password, 10));
+}
+
+const checkForExistingUser =async({email, mobile}) => {
+
+  const existingUser = await User.findOne({
+      where: {
+          [Op.or]: [{ email }, { mobile }]
+      }
   });
+
+
+  if (existingUser) {
+      return Result.Error({ message: 'User with this email or mobile number already exists'})
+  } else {
+      return Result.Ok({message:'User can be created'});
+  }
+}
+
+
+
+
+
 
 app.post('/login', async (req, res) => {
 
