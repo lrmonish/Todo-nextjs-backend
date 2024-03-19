@@ -138,17 +138,16 @@ const composeResult = async (...args) => {
         break;
       }
     } else {
-      if (i == 2) {
-        r.val = await reverse[i](r.val);
-        if (r.val === "Error Hashing Password") {
-          r.val = undefined;
-          break;
-        }
-      } else if (i == 3) {
-        r.val = await reverse[i](r.val);
-
+      r.val = await reverse[i](r.val);
+      if (r.val === "Error Hashing Password") {
+        r.val = undefined;
         break;
       }
+
+      if (i === reverse.length - 1) {
+        break;
+      }
+
       r.val = r.val.merge();
     }
   }
@@ -177,8 +176,8 @@ const checkForExistingUser = async (result, { email, mobile }) => {
 };
 
 const generatePassword = async (result, password) => {
-  const pass = password + "ghjkluirutsehrgshf";
-  // const pass = await bcrypt.hash(password, 10);
+  // const pass = password + "ghjkluirutsehrgshf";
+  const pass = await bcrypt.hash(password, 10);
 
   const regex = /^\$2b\$10\$.{53}$/;
 
